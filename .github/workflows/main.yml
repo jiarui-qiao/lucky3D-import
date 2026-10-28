@@ -45,7 +45,7 @@ jobs:
             throw "sdkmanager.bat was not found."
           }
 
-          & $sdkmanager.FullName "platforms;android-37" "build-tools;37.0.0"
+          & $sdkmanager.FullName --channel=3 "platforms;android-37.0" "build-tools;37.0.0"
           if ($LASTEXITCODE -ne 0) {
             throw "Android SDK installation failed."
           }
