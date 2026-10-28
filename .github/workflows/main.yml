@@ -53,7 +53,7 @@ jobs:
         shell: pwsh
         run: |
           ./tools/setup-shared-resources.ps1
-      - name: Diagnose trial seed data
+            - name: Diagnose trial seed data
         shell: pwsh
         run: |
           $file = "app/src/main/assets/trial/caiba-55125-trial-seed.json"
@@ -62,16 +62,25 @@ jobs:
             throw "Trial seed file not found: $file"
           }
 
-          $hash = (Get-FileHash $file -Algorithm SHA256).Hash
-          Write-Host "Actual trial seed SHA-256: $hash"
+          $raw = Get-Content $file -Raw
+          $data = $raw | ConvertFrom-Json
 
-          $data = Get-Content $file -Raw | ConvertFrom-Json
-          $issues = @($data | ForEach-Object { $_.issue })
+          Write-Host "=== File information ==="
+          Write-Host "File size: $((Get-Item $file).Length) bytes"
+          Write-Host "SHA-256: $((Get-FileHash $file -Algorithm SHA256).Hash)"
+          Write-Host "Top-level type: $($data.GetType().FullName)"
 
-          Write-Host "Record count: $($issues.Count)"
-          Write-Host "First issue: $($issues[0])"
-          Write-Host "Last issue: $($issues[-1])"
-          Write-Host "Unique issue count: $(($issues | Sort-Object -Unique).Count)"
+          Write-Host "=== Top-level property names ==="
+          if ($data -is [System.Array]) {
+            Write-Host "Root is an array; item count: $($data.Count)"
+          } else {
+            $data.PSObject.Properties.Name | ForEach-Object {
+              Write-Host "Property: $_"
+            }
+          }
+
+          Write-Host "=== JSON preview (first 2000 characters) ==="
+          Write-Host $raw.Substring(0, [Math]::Min(2000, $raw.Length))
       - name: Build debug APK
         shell: pwsh
         run: |
