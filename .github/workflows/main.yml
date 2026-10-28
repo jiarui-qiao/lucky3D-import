@@ -53,7 +53,25 @@ jobs:
         shell: pwsh
         run: |
           ./tools/setup-shared-resources.ps1
+      - name: Diagnose trial seed data
+        shell: pwsh
+        run: |
+          $file = "app/src/main/assets/trial/caiba-55125-trial-seed.json"
 
+          if (-not (Test-Path $file)) {
+            throw "Trial seed file not found: $file"
+          }
+
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash
+          Write-Host "Actual trial seed SHA-256: $hash"
+
+          $data = Get-Content $file -Raw | ConvertFrom-Json
+          $issues = @($data | ForEach-Object { $_.issue })
+
+          Write-Host "Record count: $($issues.Count)"
+          Write-Host "First issue: $($issues[0])"
+          Write-Host "Last issue: $($issues[-1])"
+          Write-Host "Unique issue count: $(($issues | Sort-Object -Unique).Count)"
       - name: Build debug APK
         shell: pwsh
         run: |
