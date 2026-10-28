@@ -89,6 +89,7 @@ jobs:
             throw "Accepting Android SDK licenses failed."
           }
 
+  
       - name: Diagnose trial seed data
         shell: pwsh
         run: |
@@ -100,27 +101,33 @@ jobs:
 
           $raw = Get-Content $file -Raw
           $data = $raw | ConvertFrom-Json
+          $records = @($data.records)
 
-          Write-Host "=== File information ==="
-          Write-Host "File size: $((Get-Item $file).Length) bytes"
-          Write-Host "SHA-256: $((Get-FileHash $file -Algorithm SHA256).Hash)"
-          Write-Host "Top-level type: $($data.GetType().FullName)"
-
-          Write-Host "=== Top-level property names ==="
-
-          if ($data -is [System.Array]) {
-            Write-Host "Root is an array; item count: $($data.Count)"
-          } else {
-            $data.PSObject.Properties.Name | ForEach-Object {
-              Write-Host "Property: $_"
-            }
-          }
-
-          Write-Host "=== JSON preview (first 2000 characters) ==="
-          Write-Host $raw.Substring(
-            0,
-            [Math]::Min(2000, $raw.Length)
+          $issues = @(
+            $records | ForEach-Object { [string]$_.issue }
           )
+
+          $duplicates = @(
+            $issues |
+            Group-Object |
+            Where-Object { $_.Count -gt 1 } |
+            ForEach-Object { $_.Name }
+          )
+
+          Write-Host "=== Hash ==="
+          Write-Host (Get-FileHash $file -Algorithm SHA256).Hash
+
+          Write-Host "=== Record checks ==="
+          Write-Host "Record count: $($records.Count)"
+          Write-Host "First issue: $($issues | Select-Object -First 1)"
+          Write-Host "Last issue: $($issues | Select-Object -Last 1)"
+          Write-Host "Unique issue count: $(($issues | Sort-Object -Unique).Count)"
+          Write-Host "Duplicate issues: $($duplicates -join ', ')"
+
+          Write-Host "=== Schema ==="
+          Write-Host "Schema version: $($data.schemaVersion)"
+          Write-Host "Source: $($data.source)"
+          Write-Host "Generated at: $($data.generatedAt)"
 
       - name: Build debug APK
         shell: pwsh
