@@ -24,14 +24,31 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK 37
         shell: pwsh
         run: |
-          sdkmanager "platforms;android-37" "build-tools;37.0.0"
+          $sdkRoot = $env:ANDROID_HOME
+          if (-not $sdkRoot) {
+            $sdkRoot = $env:ANDROID_SDK_ROOT
+          }
+          if (-not $sdkRoot) {
+            throw "Android SDK path was not found."
+          }
 
+          $sdkmanager = Get-ChildItem `
+            -Path "$sdkRoot\cmdline-tools" `
+            -Filter "sdkmanager.bat" `
+            -Recurse |
+            Select-Object -First 1
+
+          if (-not $sdkmanager) {
+            throw "sdkmanager.bat was not found."
+          }
+
+          & $sdkmanager.FullName "platforms;android-37" "build-tools;37.0.0"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Android SDK installation failed."
+          }
       - name: Set up shared resources
         shell: pwsh
         run: |
