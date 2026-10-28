@@ -15,45 +15,81 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout source code
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
+          cache: gradle
+
+      - name: Locate Android SDK
+        shell: pwsh
+        run: |
+          $sdkRoot = $env:ANDROID_HOME
+
+          if (-not $sdkRoot) {
+            $sdkRoot = $env:ANDROID_SDK_ROOT
+          }
+
+          if (-not $sdkRoot) {
+            throw "Android SDK path was not found."
+          }
+
+          Write-Host "Android SDK: $sdkRoot"
+          "ANDROID_HOME=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "ANDROID_SDK_ROOT=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Install Android SDK 37
         shell: pwsh
         run: |
           $sdkRoot = $env:ANDROID_HOME
-          if (-not $sdkRoot) {
-            $sdkRoot = $env:ANDROID_SDK_ROOT
-          }
-          if (-not $sdkRoot) {
-            throw "Android SDK path was not found."
-          }
 
           $sdkmanager = Get-ChildItem `
             -Path "$sdkRoot\cmdline-tools" `
             -Filter "sdkmanager.bat" `
-            -Recurse |
+            -Recurse `
+            -ErrorAction SilentlyContinue |
             Select-Object -First 1
 
           if (-not $sdkmanager) {
             throw "sdkmanager.bat was not found."
           }
 
-          & $sdkmanager.FullName --channel=3 "platforms;android-37.0" "build-tools;37.0.0"
+          & $sdkmanager.FullName --channel=3 `
+            "platforms;android-37.0" `
+            "build-tools;37.0.0"
+
           if ($LASTEXITCODE -ne 0) {
             throw "Android SDK installation failed."
           }
-      - name: Set up shared resources
+
+      - name: Accept Android SDK licenses
         shell: pwsh
         run: |
-          ./tools/setup-shared-resources.ps1
-            - name: Diagnose trial seed data
+          $sdkRoot = $env:ANDROID_HOME
+
+          $sdkmanager = Get-ChildItem `
+            -Path "$sdkRoot\cmdline-tools" `
+            -Filter "sdkmanager.bat" `
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if (-not $sdkmanager) {
+            throw "sdkmanager.bat was not found."
+          }
+
+          1..20 | ForEach-Object { "y" } |
+            & $sdkmanager.FullName --licenses
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Accepting Android SDK licenses failed."
+          }
+
+      - name: Diagnose trial seed data
         shell: pwsh
         run: |
           $file = "app/src/main/assets/trial/caiba-55125-trial-seed.json"
@@ -71,6 +107,7 @@ jobs:
           Write-Host "Top-level type: $($data.GetType().FullName)"
 
           Write-Host "=== Top-level property names ==="
+
           if ($data -is [System.Array]) {
             Write-Host "Root is an array; item count: $($data.Count)"
           } else {
@@ -80,16 +117,25 @@ jobs:
           }
 
           Write-Host "=== JSON preview (first 2000 characters) ==="
-          Write-Host $raw.Substring(0, [Math]::Min(2000, $raw.Length))
+          Write-Host $raw.Substring(
+            0,
+            [Math]::Min(2000, $raw.Length)
+          )
+
       - name: Build debug APK
         shell: pwsh
         run: |
-          ./gradlew.bat assembleDebug
+          .\gradlew.bat assembleDebug --no-daemon
 
-      - name: Upload APK
+          if ($LASTEXITCODE -ne 0) {
+            throw "Gradle build failed."
+          }
+
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Lucky3D-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
